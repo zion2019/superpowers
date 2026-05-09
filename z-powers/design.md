@@ -14,13 +14,13 @@ date: 2026-05-07
 |------|------|------|------|
 | V1 | superpowers | 2026-05-07 | 初始版本：Z-Tester 四阶段门禁工作流设计 |
 | V2 | superpowers | 2026-05-07 | 重构：抽取 shared/ 通用流程层，Z-Tester 通过薄封装复用 shared pipeline |
-| V3 | superpowers | 2026-05-07 | 新增 shared/env-config skill + env-context.json 运行时环境上下文 |
+| V4 | superpowers | 2026-05-08 | 改造：tester 从三阶段改为两阶段（Design → Execute），Design 产出 test-cases.md，Execute 按 4 步执行 |
 
 ---
 
 # 2. 目标
 
-**目标**：基于 Superpowers 的设计思想，构建 Z-Powers AI 技能包。抽取通用流程层（brainstorm → spec → plan）到 `shared/`，供 Z-Tester 及未来 Z-* 技能复用。第一阶段实现 Z-Tester，为 Java + Spring Boot 项目提供具备四阶段门禁的 HTTP 接口测试工作流。
+**目标**：基于 Superpowers 的设计思想，构建 Z-Powers AI 技能包。抽取通用流程层（brainstorm → spec → plan）到 `shared/`，供 Z-Tester 及未来 Z-* 技能复用。第一阶段实现 Z-Tester，为 Java + Spring Boot 项目提供两阶段门禁的 HTTP 接口测试工作流（Design → Execute）。
 
 **设计原则**：
 - 借鉴 Superpowers 的 brainstorming 逐轮提问模式，但抽取为通用 shared skill
@@ -43,8 +43,8 @@ Shared Layer        shared/ (通用流程层)
        方案设计)     编写确认)     编写+交接)
                        │
 Domain Layer        tester/ (测试领域层)
-   design ──→ plan ──→ execute
-   (薄封装)    (薄封装)   (执行)
+   design ──→ execute
+   (用例澄清)  (spec→plan→env→run)
                        │
 Runtime Layer    .zion-powers/ (运行时产物：env-context.json + 各 Z-* 产物目录)
 ```
@@ -478,23 +478,14 @@ env-context.json 缺失或关键字段为空时，必须通过 shared/env-config
 
 # 6. Z-Tester 领域层设计
 
-## 6.1 四阶段门禁流程
+## 6.1 两阶段门禁流程
 
 ```mermaid
 flowchart TD
-    subgraph Main["Z-Tester 主流程"]
-        START([用户触发测试]) --> S1[阶段一+二：用例+Spec]
-        S1 -->|用户确认 Spec| S3[阶段三：Plan]
-        S3 -->|用户确认 Plan| S4[阶段四：执行]
-        S4 --> END([完成])
-    end
-
-    subgraph Gate["硬门禁"]
-        G1[tester/design 确认] --> G2[tester/plan 确认]
-    end
-
-    S1 --> G1
-    S3 --> G2
+    START([用户触发测试]) --> RUN_DIR[创建运行时目录\n.zion-powers/tester/日期_功能名/]
+    RUN_DIR --> DESIGN[阶段一：tester/design\n用例澄清]
+    DESIGN -->|HARD-GATE\n用户确认 test-cases| EXECUTE[阶段二：tester/execute\n按序执行]
+    EXECUTE --> END([输出测试报告])
 ```
 
 ## 6.2 编排时序
@@ -504,41 +495,40 @@ sequenceDiagram
     participant User as 用户
     participant O as tester/orchestrator
     participant D as tester/design
-    participant P as tester/plan
     participant E as tester/execute
+    participant SP as shared/spec
+    participant PL as shared/plan
     participant EC as shared/env-config
+    participant TR as shared/task-runner
     participant S as shared/session
 
     User->>O: 触发测试（如"测试登录接口"）
     O->>S: session.record("任务开始", {时间戳, 原始输入})
-    O->>D: 进入阶段一+二
+    O->>D: 进入阶段一
 
     Note over D: 注入测试上下文 → 委托 shared/brainstorm
     D->>User: 逐轮提问，确认测试范围
     D->>User: 展示用例表格
     User->>D: 确认用例
 
-    Note over D: 注入测试 Spec 模板 → 委托 shared/spec
-    D->>User: 展示 spec.md
-    User->>D: 确认 Spec
+    D->>D: 编写 test-cases.md
+    D->>S: session.record("Test-Cases 确认")
+    D-->>O: 阶段一完成
 
-    D->>S: session.record("Spec 确认")
-    D-->>O: 阶段一+二完成
+    O->>E: 进入阶段二
 
-    O->>P: 进入阶段三
+    Note over E: Step 1: 生成 spec
+    E->>SP: 调用 shared/spec
+    SP-->>E: spec.md
 
-    Note over P: 注入测试任务分解模板 → 委托 shared/plan
-    P->>User: 确认 Plan 任务清单
-    User->>P: 确认 Plan
-    P->>S: session.record("Plan 确认")
-    P-->>O: 阶段三完成
+    Note over E: Step 2: 生成 plan
+    E->>PL: 调用 shared/plan
+    PL-->>E: plan.md
 
-    O->>E: 进入阶段四
-
-    Note over E,EC: 环境就绪检查
+    Note over E: Step 3: 环境检查
     E->>EC: 引用 shared/env-config
     alt env-context.json 不存在
-        EC->>User: 逐项引导配置（Maven/JDK/MCP/日志）
+        EC->>User: 逐项引导配置
         User->>EC: 逐项提供
         EC->>EC: 写入 env-context.json
     else 已存在
@@ -547,24 +537,20 @@ sequenceDiagram
     end
     EC-->>E: 返回环境配置
 
-    E->>E: 执行任务清单，更新进度
+    Note over E: Step 4: 执行测试
+    E->>TR: 调用 shared/task-runner
+    TR->>TR: 逐 Step 执行
 
-    alt 测试代码失败
-        E->>E: 自动修复，重试 1 次
-    else 业务代码失败
-        E->>User: 暂停，报告根因分析
-        User->>E: 处理决定
-    end
-
+    E->>E: 追加结果摘要到 spec.md
     E->>S: session.record("执行完成", {统计})
-    E-->>O: 阶段四完成
+    E-->>O: 阶段二完成
     O->>User: 测试完成报告
 ```
 
 ## 6.3 tester/orchestrator — 调度器
 
 ### 职责
-- 编排四阶段
+- 编排两阶段（Design → Execute）
 - 强制执行门禁机制
 - 创建运行时目录 `.zion-powers/tester/[yyyy-MM-dd]_[功能名]/`
 - 不包含任何业务逻辑
@@ -573,84 +559,55 @@ sequenceDiagram
 
 ```
 <HARD-GATE>
-每个阶段完成后必须等待用户显式确认，禁止跳过任何门禁进入下一阶段。
-任一阶段的确认结果必须写入 session 记录，否则视为门禁未通过。
+Design 阶段完成后必须等待用户确认 test-cases，禁止跳过门禁进入 Execute 阶段。
+确认结果必须写入 session 记录，否则视为门禁未通过。
 </HARD-GATE>
 ```
 
-## 6.4 tester/design — 薄封装层
+## 6.4 tester/design — 用例澄清
 
 ### 职责
-不包含通用流程逻辑，核心工作是**注入测试领域上下文**后委托 shared skill。
+不包含通用流程逻辑，核心工作是**注入测试领域上下文**后委托 shared skill，产出 test-cases.md。
 
 1. 接收 orchestrator 的测试请求
 2. 注入领域上下文到 shared/brainstorm：
    - "本次编写 HTTP 接口测试用例"
    - 确认事项：接口地址、请求方法、参数、预期状态码
 3. 委托 shared/brainstorm 执行通用流程（逐轮提问 → 方案 → 确认）
-4. 收到确认的设计方案后，注入 Spec 模板到 shared/spec：
-   - 使用测试 Spec 模板（含测试策略表、用例 ID）
-5. 委托 shared/spec 编写文档 → 用户确认
-6. 结果回 orchestrator
+4. 收到确认后，编写 test-cases.md
+5. 结果回 orchestrator
 
 ### 协作关系
 
 ```
 uses:
   shared/brainstorm  → 逐轮提问 + 方案设计
-  shared/spec        → spec.md 编写 + 自检
   shared/session     → 确认记录
 ```
 
-## 6.5 tester/plan — 薄封装层
+## 6.5 tester/execute — 测试执行
 
 ### 职责
-1. 接收 orchestrator 的「编写测试执行计划」请求
-2. 注入测试任务分解模板到 shared/plan：
-   - 每个用例分解：数据准备 → 执行请求 → 断言 → 验证日志 → 清理
-   - 进度标记：`[ ]` / `[~]` / `[✓]` / `[✗]`
-3. 委托 shared/plan 执行通用流程（任务分解 → 自检 → 交接）
-4. 结果回 orchestrator
+按 4 步顺序执行测试，每步调用 shared skill 完成。
 
 ### 协作关系
 
 ```
 uses:
-  shared/plan        → 任务分解 + 自检 + 交接
-  shared/session     → 确认记录
-```
-
-### Plan 文档格式
-
-```markdown
-# [功能名称] - 测试执行计划 (Plan)
-
-## 前置准备
-- [ ] 执行前检查：`shared/env-config` 确认环境上下文就绪
-- [ ] 确认测试环境（端口:8080）
-
-## 执行任务清单
-
-### TC-001: [场景名]
-- [ ] 1. 数据准备：...
-- [ ] 2. 执行请求：POST /api/...
-- [ ] 3. 断言：...
-- [ ] 4. 验证日志：...
-- [ ] 5. 数据清理：...
-```
-
-## 6.6 tester/execute — 执行
-
-### 职责
-按 Plan 任务清单顺序执行测试。执行前强制引用 `shared/env-config` 确认环境就绪。
-
-### 协作关系
-
-```
-uses:
-  shared/env-config  → 执行前加载环境上下文，获取 MCP/Maven/JVM/日志配置
+  shared/spec        → Step 1：生成 spec.md
+  shared/plan        → Step 2：生成 plan.md
+  shared/env-config  → Step 3：环境检查
+  shared/task-runner → Step 4：执行测试
   shared/session     → 记录执行结果
 ```
+
+### 流程
+
+1. **Step 1**：调用 shared/spec，输入 test-cases.md，产出 spec.md（协作锚点）
+2. **Step 2**：调用 shared/plan，输入 test-cases.md，产出 plan.md
+3. **Step 3**：调用 shared/env-config 确认环境就绪
+4. **Step 4**：调用 shared/task-runner，传入 plan.md，逐 Step 执行
+5. 追加结果摘要到 spec.md
 
 ### 失败处理策略
 
@@ -681,8 +638,7 @@ uses:
 
 | 阶段 | 产出 | 确认点 | 确认后才能进入 |
 |------|------|--------|---------------|
-| 用例+Spec 编写 | spec.md | 用户确认 Spec | Plan 编写 |
-| Plan 编写 | plan.md | 用户确认 Plan | 执行 |
+| 用例澄清 | test-cases.md | 用户确认 test-cases | Execute |
 | 执行 | 执行结果 | 执行完成报告 | 完成 |
 
 ## shared vs domain 职责边界
@@ -691,12 +647,10 @@ uses:
 |------|------|------|
 | 逐轮提问澄清需求 | shared/brainstorm | 与领域无关的通用对话模式 |
 | 提出 2-3 种方案 | shared/brainstorm | 与领域无关的决策方法 |
-| 编写设计文档 | shared/spec | 与领域无关的文档规范 |
+| 编写协作锚点文档 | shared/spec | 与领域无关的文档规范 |
 | 自检 placeholder/矛盾 | shared/spec | 与领域无关的质量检查 |
 | 分解 bite-size 任务 | shared/plan | 与领域无关的任务规划 |
 | 管理运行时环境上下文 | shared/env-config | 与领域无关的环境配置管理 |
+| 管理执行循环和进度 | shared/task-runner | 与领域无关的执行流程管理 |
 | 测试用例表格 | tester/design（注入） | 测试领域特有格式 |
-| 测试 Spec 模板 | tester/design（注入） | 测试领域特有模板 |
-| 测试任务分解（数据准备→请求→断言） | tester/plan（注入） | 测试领域特有分解方式 |
-| 执行 HTTP 请求 | tester/execute | 测试领域特有执行逻辑 |
-| 失败的自动修复策略 | tester/execute | 测试领域特有策略 |
+| 测试执行编排（spec→plan→env→run） | tester/execute | 测试领域特有执行顺序 |
