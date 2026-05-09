@@ -1,21 +1,33 @@
 ---
 name: shared-spec
-description: "Use when a confirmed design needs to be formalized into a specification document. Called after shared/brainstorm completes, before shared/plan."
+description: "Use to formalize a confirmed design into a specification document. Calls shared/brainstorm internally to clarify document scope and structure before writing."
 ---
 
 # shared/spec — 设计文档编写
 
 将经 brainstorm 确认的设计方案，编写为规范的 spec.md，经用户确认后交付 plan 阶段。
 
+## 协作关系
+
+```
+uses:
+  shared/brainstorm  → 编写前澄清 spec scope 和结构偏好
+  shared/session     → 记录确认结果
+```
+
 <HARD-GATE>
-未经用户确认 spec，不得进入 plan 编写阶段。
+未经用户确认 spec 结构方案（brainstorm 输出），不得进入编写阶段。
+未经用户确认 spec 内容，不得进入 plan 编写阶段。
 自检未通过的 spec 不得提交用户审阅。
 </HARD-GATE>
 
 ## 流程
 
-1. **输入**：经 brainstorm 确认的设计方案（架构、组件、数据流等）
-2. **编写文档**：按规范结构编写 spec.md，保存到调用方指定路径
+1. **前置 brainstorm**：调用 `shared/brainstorm`，注入上下文：
+   - "本次要编写一份设计文档，需要澄清文档范围和结构偏好"
+   - 聚焦于：哪些模块需要覆盖、文档粒度和结构偏好
+   - 产出：经确认的文档范围与结构方案（大纲或章节列表）
+2. **编写文档**：基于确认结果，按规范结构编写 spec.md，保存到调用方指定路径
 3. **自检**：
    - 占位符扫描：是否有 TBD、TODO、不完整章节？
    - 内部一致性：架构是否与功能描述矛盾？

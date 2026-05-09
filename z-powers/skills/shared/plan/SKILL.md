@@ -1,20 +1,32 @@
 ---
 name: shared-plan
-description: "Use when a confirmed spec needs to be decomposed into bite-sized execution tasks. Called after shared/spec completes, before shared/task-runner."
+description: "Use to decompose a confirmed spec into bite-sized execution tasks. Calls shared/brainstorm internally to clarify execution strategy before writing the plan."
 ---
 
 # shared/plan — 执行计划编写
 
 将经确认的 spec 分解为可独立执行的 bite-size 任务，输出 plan.md，经用户确认后交付。
 
+## 协作关系
+
+```
+uses:
+  shared/brainstorm  → 编写前澄清执行策略和分解方式
+  shared/session     → 记录确认结果
+```
+
 <HARD-GATE>
+未经用户确认执行策略（brainstorm 输出），不得进入分解阶段。
 未经用户确认 plan，不得交付。
 含占位符的 plan 不得提交用户审阅。
 </HARD-GATE>
 
 ## 流程
 
-1. **输入**：经确认的 spec.md
+1. **前置 brainstorm**：调用 `shared/brainstorm`，注入上下文：
+   - "本次要将已确认的 spec 分解为可执行的计划，需要澄清执行策略和分解方式"
+   - 聚焦于：技术栈确认、实现顺序、风险点、任务粒度偏好
+   - 产出：经确认的执行策略与分解方案
 2. **文件结构先行**：列出所有需要创建/修改的文件及其职责
 3. **分解任务**：每步 2-5 分钟，独立可执行
 4. **编写计划文档**：按规范结构编写 plan.md，保存到调用方指定路径

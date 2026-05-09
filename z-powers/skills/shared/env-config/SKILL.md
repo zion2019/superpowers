@@ -1,11 +1,12 @@
 ---
 name: shared-env-config
-description: "Use when a Z-* executor (e.g. tester/execute) needs environment context before execution—MCP servers, Maven, JDK, log paths. Referenced by $Z-* execute skills via uses:."
+description: "Use when a Z-* executor (e.g. tester/execute) needs environment context before execution. Manages multi-project env-context.json with auth, build, run, and DB config per project. Referenced by $Z-* execute skills via uses:."
 ---
 
 # shared/env-config — 运行时环境上下文管理
 
-管理 `.zion-powers/env-context.json` 的全生命周期。在 executor 执行前确保环境就绪。被 `tester/execute` 及未来 Z-* execute 阶段通过 `uses:` 引用。
+管理 `.zion-powers/env-context.json` 的全生命周期。支持多独立项目配置，每个项目包含鉴权、编译、启动、数据库等配置。
+在 executor 执行前确保环境就绪。被 `tester/execute` 及未来 Z-* execute 阶段通过 `uses:` 引用。
 
 ## 协作关系
 
@@ -21,21 +22,25 @@ uses:
 ```mermaid
 flowchart TD
     START([被 Z-* 引用]) --> CHECK{env-context.json\n是否存在?}
-    CHECK -->|是| READ[读取文件内容]
-    READ --> SHOW[展示配置摘要]
-    SHOW --> CONFIRM{用户确认?}
-    CONFIRM -->|否| MARK[标记为需重配]
+    CHECK -->|是| SHOW_PROJECTS[展示已配置项目列表\n含 current_project 标记]
+    SHOW_PROJECTS --> CHOOSE[询问: 本次为哪个项目工作?\n选择已有 / 新增项目]
+    CHOOSE -->|选择已有| SUMMARY[展示配置摘要]
+    SUMMARY --> CONFIRM{用户确认?}
+    CONFIRM -->|否| RECONFIG[标记为需重配\n进入逐项引导]
     CONFIRM -->|是| RECORD[shared/session\nrecord 环境配置确认]
     RECORD --> RETURN[返回配置数据\n给调用方]
-    MARK --> ASK[逐项提问采集]
-    CHECK -->|否| ASK[逐项提问采集]
-    ASK --> Q_MVN[① Maven 路径 + settings]
-    Q_MVN --> Q_JDK[② JDK 路径]
-    Q_JDK --> Q_START[③ 项目启动命令 + 工作目录]
-    Q_START --> Q_LOG[④ 日志目录]
-    Q_LOG --> Q_DB[⑤ DB MCP + 环境信息]
-    Q_DB --> Q_HTTP[⑥ HTTP MCP + base_url]
-    Q_HTTP --> SAVE[写入 env-context.json]
+    RECONFIG --> Q_NAME
+    CHOOSE -->|新增项目| Q_NAME[① 项目名称]
+    CHECK -->|否| Q_NAME
+
+    Q_NAME --> Q_AUTH[② 鉴权方式\ndirect_token 或 acquire]
+    Q_AUTH --> Q_JDK[③ JDK 路径]
+    Q_JDK --> Q_MVN[④ Maven 路径 + settings]
+    Q_MVN --> Q_START[⑤ 启动命令 + 工作目录\n采集后显式确认]
+    Q_START --> Q_DB[⑥ DB 环境信息]
+    Q_DB --> Q_MCP[⑦ MCP server + base_url]
+    Q_MCP --> Q_LOG[⑧ 日志目录]
+    Q_LOG --> SAVE[写入 env-context.json\n保存到对应项目下]
     SAVE --> SHOW_ALL[展示完整配置\n让用户最终确认]
     SHOW_ALL --> RECORD
 ```
@@ -46,51 +51,61 @@ flowchart TD
 
 | 顺序 | 配置项 | 引导词 | 约束 |
 |------|--------|--------|------|
-| ① | Maven 路径 | "Maven 安装目录和 settings.xml 文件路径是？" | 确认路径存在 |
-| ② | JDK 路径 | "项目使用的 JDK 安装路径是？" | 确认路径存在 |
-| ③ | 启动命令 | "项目的完整启动命令是什么？工作目录在哪？"（如 `mvn spring-boot:run`） | 含工作目录 |
-| ④ | 日志目录 | "项目运行时日志输出到哪个目录？" | 确认目录存在 |
-| ⑤ | DB MCP | "数据库环境名（如 dev/test）、MCP server 名、host、port、库名、用户名？可配置多个环境。" | 禁止 root；密码不记录在此文件 |
-| ⑥ | HTTP MCP | "本地 HTTP 服务的 base_url、端口和对应的 MCP server 名是？" | 确认端口可访问 |
+| ① | 项目名称 | "请给这个项目一个简短名称（如 my-app）？" | 唯一标识 |
+| ② | 鉴权 | "鉴权 token 提供方式：直接给 token (direct_token)，还是描述获取方式 (acquire)？" | direct_token 时存储值；acquire 时存储获取描述+凭据 |
+| ③ | JDK 路径 | "项目使用的 JDK 安装路径是？" | 确认路径存在 |
+| ④ | Maven 路径 | "Maven 安装目录和 settings.xml 文件路径是？" | 确认路径存在 |
+| ⑤ | 启动命令 | "项目的完整启动命令是什么？工作目录在哪？" | **采集后显式确认**："是这个命令没错？"用户必须确认 |
+| ⑥ | DB 信息 | "数据库环境名（如 dev/test）、host、port、库名、用户名？可配置多个环境。" | 禁止 root；密码不记录在此文件 |
+| ⑦ | MCP server | "本地 HTTP 服务的 base_url、端口和对应的 MCP server 名是？" | 确认端口可访问 |
+| ⑧ | 日志目录 | "项目运行时日志输出到哪个目录？" | 确认目录存在 |
 
 ## 文件格式
 
 ```json
 {
-  "version": 1,
-  "updated_at": "2026-05-07",
-  "maven": {
-    "home": "C:/tools/maven",
-    "settings": "C:/Users/xxx/.m2/settings.xml"
-  },
-  "jvm": {
-    "java_home": "C:/Program Files/Java/jdk-17",
-    "start_command": "mvn spring-boot:run",
-    "project_dir": "E:/project/my-app"
-  },
-  "mcp_servers": {
-    "db": {
-      "environments": [
-        {
-          "name": "dev",
-          "mcp_server_name": "dev-db-mcp",
-          "db_type": "mysql",
-          "host": "localhost",
-          "port": 3306,
-          "database": "myapp_dev",
-          "username": "app_user",
-          "constraints": ["禁止使用 root 账号"]
-        }
-      ]
-    },
-    "http": {
-      "mcp_server_name": "local-http-mcp",
-      "base_url": "http://localhost",
-      "port": 8080
+  "version": 2,
+  "updated_at": "2026-05-09 10:00",
+  "current_project": "my-app",
+  "projects": {
+    "my-app": {
+      "auth": {
+        "method": "direct_token",
+        "token": "eyJhbGciOiJIUzI1NiIs...",
+        "acquire": null,
+        "acquire_credentials": null
+      },
+      "build": {
+        "jdk_home": "C:/Program Files/Java/jdk-17",
+        "maven_home": "C:/tools/maven",
+        "maven_settings": "C:/Users/xxx/.m2/settings.xml"
+      },
+      "run": {
+        "jdk_home": "C:/Program Files/Java/jdk-17",
+        "start_command": "mvn spring-boot:run",
+        "project_dir": "E:/project/my-app"
+      },
+      "db": {
+        "environments": [
+          {
+            "name": "dev",
+            "host": "localhost",
+            "port": 3306,
+            "database": "myapp_dev",
+            "username": "app_user",
+            "constraints": ["禁止使用 root 账号"]
+          }
+        ]
+      },
+      "mcp_servers": {
+        "db_mcp": "dev-db-mcp",
+        "http_mcp": "local-http-mcp",
+        "base_url": "http://localhost:8080"
+      },
+      "logs": {
+        "directory": "E:/project/my-app/logs"
+      }
     }
-  },
-  "logs": {
-    "directory": "E:/project/my-app/logs"
   }
 }
 ```
@@ -100,6 +115,13 @@ flowchart TD
 1. **env-context.json** — 写入 `.zion-powers/env-context.json`
 2. **session 记录** — `shared/session.record("环境配置确认", {配置摘要, 环境列表})`
 3. **返回数据** — 将完整配置对象返回给调用方
+
+### 启动命令确认说明
+
+启动命令采集后必须显式确认：
+1. 回显完整命令 + 工作目录给用户
+2. 用户必须明确回答"是，正确"
+3. 未确认时，env-config 返回"启动命令未确认"状态给调用方
 
 ## 被调用方使用
 
