@@ -1,0 +1,15 @@
+{
+  "name": "z-powers-local",
+  "owner": {
+    "name": "superpowers"
+  },
+  "plugins": [
+    {
+      "name": "z-powers",
+      "source": "./",
+      "description": "Z-Powers skills: Java/Spring Boot 接口测试工作流及通用流程层 (brainstorm → spec → plan → execute)",
+      "version": "1.0.0",
+      "strict": false
+    }
+  ]
+}
