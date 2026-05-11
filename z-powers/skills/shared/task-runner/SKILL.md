@@ -21,6 +21,15 @@ uses:
 
 domain executor 注入具体执行逻辑（如 HTTP 请求、编译命令、DB 查询），task-runner 管理执行流程和进度。
 
+## 执行模式
+
+调用方通过 mode 参数指定：
+
+| mode | 行为 |
+|------|------|
+| `subagent` | 每个 Task 派发独立子代理，Task 间做两阶段审查（spec 合规 + 代码质量） |
+| `inline` (默认) | 在当前会话中按序执行，每 2-3 个 Task 暂停检查点 |
+
 ## 流程
 
 ```mermaid
@@ -115,4 +124,22 @@ domain executor（如 tester/execute）在 execute 阶段：
 3. task-runner 开始循环，逐个 Step 回调 domain executor
 4. domain executor 解析 Step 原文，执行测试操作
 5. 重复直到全部完成
+
+## MCP 强制规则
+
+<MCP-MANDATE>
+执行过程中：
+- 任何 HTTP 请求操作，必须通过 env-context.json 中 `mcp_servers.http_mcp` 指定的 MCP 工具发起
+- 任何数据库查询操作，必须通过 `mcp_servers.db_mcp` 指定的 MCP 工具执行
+- 禁止自行构造 curl、HttpClient、RestTemplate 等本地 HTTP 调用
+- 禁止直接 JDBC 连接数据库
+
+执行前从 env-context.json 读取 `mcp_servers.http_mcp` 和 `mcp_servers.db_mcp` 确定具体 MCP server 名。
+</MCP-MANDATE>
+
+### HTTP 调用失败排查
+
+1. 读取 env-context.json 中 `run.log_file` 查看应用日志
+2. 将日志中相关异常信息展示给用户
+3. 不要自行猜测原因——用日志说话
 ```

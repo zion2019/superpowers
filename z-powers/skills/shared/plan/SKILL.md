@@ -3,6 +3,12 @@ name: shared-plan
 description: "Use to decompose a confirmed spec into bite-sized execution tasks. Calls shared/brainstorm internally to clarify execution strategy before writing the plan."
 ---
 
+<ACTIVATION>
+1. 调用 shared/session.get("流程状态") 获取最新流程状态
+2. 如果当前步骤不是 plan 且 plan 已在 completed 中，向上报告 plan 已完成
+3. 如果存在 resume_context，展示给用户确认后继续
+</ACTIVATION>
+
 # shared/plan — 执行计划编写
 
 将经确认的 spec 分解为可独立执行的 bite-size 任务，输出 plan.md，经用户确认后交付。
@@ -75,31 +81,7 @@ uses:
 
 ## 文档结构
 
-```markdown
-# [功能名称] Implementation Plan
-
-**Goal:** [一句话描述]
-
-**Architecture:** [2-3 句]
-
-**Tech Stack:** [关键技术栈]
-
----
-
-### Task N: [组件名]
-
-**Files:**
-- Create: `path/to/file`
-- Modify: `path/to/file:123-145`
-- Test: `tests/path/to/test.py`
-
-- [ ] **Step 1: 编写失败测试**
-  ```代码```
-- [ ] **Step 2: 运行确认失败**
-- [ ] **Step 3: 最小实现**
-  ```代码```
-- [ ] **Step 4: 运行确认通过**
-```
+读取并遵循 `templates/plan.md` 的文档结构。
 
 ## 输出契约
 
@@ -114,3 +96,22 @@ uses:
 |--------|----------|
 | `tester/plan` | 确认后调用 `shared/task-runner` 执行任务 |
 | 其他 Z-* | 由调用方自行编排 |
+
+## 执行交接
+
+Plan 确认后，必须询问用户选择执行方式：
+
+> "Plan 已保存到 `<路径>`。两种执行方式：
+>
+> **1. Subagent 执行（推荐）** — 每个 Task 派发独立子代理，Task 间自动审查
+> **2. Inline 执行** — 在当前会话中按序执行，每 2-3 个 Task 设检查点
+>
+> **选择哪种？**"
+
+### 若选 Subagent
+- 调用 shared/task-runner 时传入 mode: subagent
+- task-runner 为每个 Task 派发独立子代理，做两阶段审查
+
+### 若选 Inline
+- 调用 shared/task-runner 时传入 mode: inline
+- 在当前会话中按序执行，每 2-3 个 Task 暂停展示进展

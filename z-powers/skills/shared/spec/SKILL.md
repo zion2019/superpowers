@@ -3,6 +3,12 @@ name: shared-spec
 description: "Use to formalize a confirmed design into a specification document. Calls shared/brainstorm internally to clarify document scope and structure before writing."
 ---
 
+<ACTIVATION>
+1. 调用 shared/session.get("流程状态") 获取最新流程状态
+2. 如果当前步骤不是 spec 且 spec 已在 completed 中，向上报告 spec 已完成
+3. 如果存在 resume_context，展示给用户确认后继续
+</ACTIVATION>
+
 # shared/spec — 设计文档编写
 
 将经 brainstorm 确认的设计方案，编写为规范的 spec.md，经用户确认后交付 plan 阶段。
@@ -48,20 +54,7 @@ uses:
 
 ## 文档结构
 
-```markdown
-# [功能名称] - 设计文档
-
-## 1. 目标
-## 2. 架构
-### 2.1 组件
-### 2.2 数据流
-## 3. 详细设计
-## 4. 错误处理
-## 5. 测试策略
-## 6. 未完成事项
-```
-
-此为通用模板。调用方（如 tester/design）可在注入领域上下文时定制结构。
+读取并遵循 `templates/spec.md` 的文档结构。调用方注入的具体领域上下文可在模板基础上扩展。
 
 ## 输出契约
 

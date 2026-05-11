@@ -38,12 +38,24 @@ flowchart TD
 - tester/design 注入测试上下文，委托 shared/brainstorm 澄清用例
 - 产出 test-cases.md
 - 等待 tester/design 返回
+- 调用 shared/session.record("流程状态", {
+    current_step: "design",
+    pipeline: ["design", "spec", "plan", "env-config", "task-runner"],
+    completed: <动态>根据当前完成情况填充,
+    resume_context: "阶段一完成，test-cases.md 已产出"
+  })
 
 ### HARD-GATE：test-cases 确认
 - 确认 `shared/session.record("Test-Cases 确认")` 已写入
 - 未通过不得进入阶段二
 
 ### 阶段二：委托 tester/execute
+- 调用 shared/session.record("流程状态", {
+    current_step: "spec",
+    pipeline: ["design", "spec", "plan", "env-config", "task-runner"],
+    completed: ["design"],
+    resume_context: "准备进入阶段二：生成 spec"
+  })
 - tester/execute 按 4 步执行：生成 spec → 生成 plan → 环境检查 → 执行测试
 - 等待 tester/execute 返回
 

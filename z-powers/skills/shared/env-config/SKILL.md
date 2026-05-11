@@ -36,10 +36,11 @@ flowchart TD
     Q_NAME --> Q_AUTH[② 鉴权方式\ndirect_token 或 acquire]
     Q_AUTH --> Q_JDK[③ JDK 路径]
     Q_JDK --> Q_MVN[④ Maven 路径 + settings]
-    Q_MVN --> Q_START[⑤ 启动命令 + 工作目录\n采集后显式确认]
-    Q_START --> Q_DB[⑥ DB 环境信息]
-    Q_DB --> Q_MCP[⑦ MCP server + base_url]
-    Q_MCP --> Q_LOG[⑧ 日志目录]
+    Q_MVN --> Q_BUILD[⑤ 编译命令 + 工作目录\n采集后显式确认]
+    Q_BUILD --> Q_RUN[⑥ 启动命令\n采集后自动追加日志重定向]
+    Q_RUN --> Q_DB[⑦ DB 环境信息]
+    Q_DB --> Q_MCP[⑧ MCP server + base_url]
+    Q_MCP --> Q_LOG[⑨ 日志目录]
     Q_LOG --> SAVE[写入 env-context.json\n保存到对应项目下]
     SAVE --> SHOW_ALL[展示完整配置\n让用户最终确认]
     SHOW_ALL --> RECORD
@@ -53,12 +54,19 @@ flowchart TD
 |------|--------|--------|------|
 | ① | 项目名称 | "请给这个项目一个简短名称（如 my-app）？" | 唯一标识 |
 | ② | 鉴权 | "鉴权 token 提供方式：直接给 token (direct_token)，还是描述获取方式 (acquire)？" | direct_token 时存储值；acquire 时存储获取描述+凭据 |
+
+<ANTI-PATTERN>
+禁止通过读取项目代码、配置文件、或调用任何工具来推测鉴权方式。
+只能通过询问用户获取。
+</ANTI-PATTERN>
+
 | ③ | JDK 路径 | "项目使用的 JDK 安装路径是？" | 确认路径存在 |
 | ④ | Maven 路径 | "Maven 安装目录和 settings.xml 文件路径是？" | 确认路径存在 |
-| ⑤ | 启动命令 | "项目的完整启动命令是什么？工作目录在哪？" | **采集后显式确认**："是这个命令没错？"用户必须确认 |
-| ⑥ | DB 信息 | "数据库环境名（如 dev/test）、host、port、库名、用户名？可配置多个环境。" | 禁止 root；密码不记录在此文件 |
-| ⑦ | MCP server | "本地 HTTP 服务的 base_url、端口和对应的 MCP server 名是？" | 确认端口可访问 |
-| ⑧ | 日志目录 | "项目运行时日志输出到哪个目录？" | 确认目录存在 |
+| ⑤ | 编译命令 | "项目的完整编译命令是什么？（如 `mvn clean package -DskipTests`）工作目录在哪？" | 采集后显式确认 |
+| ⑥ | 启动命令 | "编译产物的启动命令是什么？（如 `java -jar target/xxx.jar`）" | 采集后自动拼接日志重定向：`> .zion-powers/tester/{{session_dir}}/log/app.log 2>&1`，显式确认 |
+| ⑦ | DB 信息 | "数据库环境名（如 dev/test）、host、port、库名、用户名？可配置多个环境。" | 禁止 root；密码不记录在此文件 |
+| ⑧ | MCP server | "本地 HTTP 服务的 base_url、端口和对应的 MCP server 名是？" | 确认端口可访问 |
+| ⑨ | 日志目录 | "项目运行时日志输出到哪个目录？" | 确认目录存在 |
 
 ## 文件格式
 
@@ -76,14 +84,13 @@ flowchart TD
         "acquire_credentials": null
       },
       "build": {
-        "jdk_home": "C:/Program Files/Java/jdk-17",
-        "maven_home": "C:/tools/maven",
-        "maven_settings": "C:/Users/xxx/.m2/settings.xml"
+        "command": "mvn clean package -DskipTests",
+        "project_dir": "E:/project/my-app"
       },
       "run": {
-        "jdk_home": "C:/Program Files/Java/jdk-17",
-        "start_command": "mvn spring-boot:run",
-        "project_dir": "E:/project/my-app"
+        "command": "java -jar target/my-app-1.0.0.jar",
+        "project_dir": "E:/project/my-app",
+        "log_file": ".zion-powers/tester/2026-05-09_login/log/app.log"
       },
       "db": {
         "environments": [
@@ -116,12 +123,18 @@ flowchart TD
 2. **session 记录** — `shared/session.record("环境配置确认", {配置摘要, 环境列表})`
 3. **返回数据** — 将完整配置对象返回给调用方
 
-### 启动命令确认说明
+### 编译/启动命令确认说明
 
-启动命令采集后必须显式确认：
+#### 编译命令确认
 1. 回显完整命令 + 工作目录给用户
 2. 用户必须明确回答"是，正确"
-3. 未确认时，env-config 返回"启动命令未确认"状态给调用方
+3. 未确认时，env-config 返回"编译命令未确认"状态给调用方
+
+#### 启动命令确认
+1. 回显完整命令（含自动追加的日志重定向：`> .zion-powers/tester/{{session_dir}}/log/app.log 2>&1`）
+2. 确认日志目录存在（不存在则自动创建）
+3. 用户必须明确回答"是，正确"
+4. 未确认时返回"启动命令未确认"状态给调用方
 
 ## 被调用方使用
 

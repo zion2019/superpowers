@@ -100,11 +100,17 @@ Z-Powers/
     │   ├── plan/SKILL.md              # 通用：执行计划编写 + 执行交接
     │   ├── session/SKILL.md           # 通用：会话管理
     │   └── spec/SKILL.md              # 通用：设计文档编写 + 用户确认
-    └── tester/
+    ├── tester/
         ├── orchestrator/SKILL.md      # 编排四阶段，注入测试上下文
         ├── design/SKILL.md            # 薄封装：注入测试用例领域上下文
         ├── plan/SKILL.md              # 薄封装：注入测试任务分解模板
         └── execute/SKILL.md           # 执行：测试执行逻辑
+    └── templates/
+        ├── brainstorm-question.md
+        ├── test-cases.md
+        ├── spec.md
+        ├── plan.md
+        └── session-entry.md
 ```
 
 ## 4.2 运行时目录
@@ -418,7 +424,8 @@ flowchart TD
 |--------|-------------|------|
 | Maven 路径 | "Maven 安装路径和 settings.xml 文件在哪？" | 确认路径存在 |
 | JDK 路径 | "项目使用的 JDK 路径是？" | 确认路径存在 |
-| 启动命令 | "项目的完整启动命令是什么？（如 `mvn spring-boot:run`）" | 含工作目录 |
+| 编译命令 | "项目的完整编译命令是什么？（如 `mvn spring-boot:run`）" | 含工作目录 |
+| 启动命令 | "编译产物的启动命令？（如 `java -jar`）" | 自动追加日志重定向 |
 | 日志目录 | "项目运行时日志输出到哪个目录？" | 确认目录存在 |
 | DB MCP + 环境 | "提供环境名、MCP server 名、数据库 host/port/库名/用户。每个环境独立配置。" | 禁止 root；密码不记录在此文件 |
 | HTTP MCP | "本地 HTTP 服务的 base_url 和端口是？使用的 MCP server 名是？" | 确认端口可访问 |
@@ -429,14 +436,14 @@ flowchart TD
 {
   "version": 1,
   "updated_at": "",
-  "maven": {
-    "home": "",
-    "settings": ""
+  "build": {
+    "command": "mvn clean package -DskipTests",
+    "project_dir": "E:/project/my-app"
   },
-  "jvm": {
-    "java_home": "",
-    "start_command": "",
-    "project_dir": ""
+  "run": {
+    "command": "java -jar target/my-app-1.0.0.jar",
+    "project_dir": "E:/project/my-app",
+    "log_file": ".zion-powers/tester/2026-05-09_login/log/app.log"
   },
   "mcp_servers": {
     "db": {
