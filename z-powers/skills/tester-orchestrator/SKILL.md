@@ -11,8 +11,8 @@ description: "Use when a user requests testing a Java/Spring Boot API endpoint. 
 
 ```
 uses:
-  ├── tester/design       → 阶段一：用例澄清，产出 test-cases.md
-  ├── tester/execute      → 阶段二：按序执行 4 步（spec → plan → env-config → task-runner）
+  ├── tester-design       → 阶段一：用例澄清，产出 test-cases.md
+  ├── tester-execute      → 阶段二：按序执行 4 步（spec → plan → env-config → task-runner）
   └── shared/session      → 贯穿全部阶段
 ```
 
@@ -21,8 +21,8 @@ uses:
 ```mermaid
 flowchart TD
     START([用户触发测试]) --> RUN_DIR[创建运行时目录\n.zion-powers/tester/日期_功能名/]
-    RUN_DIR --> S1[阶段一：tester/design]
-    S1 -->|HARD-GATE\n用户确认 test-cases| S2[阶段二：tester/execute]
+    RUN_DIR --> S1[阶段一：tester-design]
+    S1 -->|HARD-GATE\n用户确认 test-cases| S2[阶段二：tester-execute]
     S2 --> END([输出测试报告])
 ```
 
@@ -34,10 +34,10 @@ flowchart TD
 3. `shared/session.record("任务开始", {功能名, 原始输入, 时间戳})`
 4. 按阶段顺序执行
 
-### 阶段一：委托 tester/design
-- tester/design 注入测试上下文，委托 shared/brainstorm 澄清用例
+### 阶段一：委托 tester-design
+- tester-design 注入测试上下文，委托 shared/brainstorm 澄清用例
 - 产出 test-cases.md
-- 等待 tester/design 返回
+- 等待 tester-design 返回
 - 调用 shared/session.record("流程状态", {
     current_step: "design",
     pipeline: ["design", "spec", "plan", "env-config", "task-runner"],
@@ -49,15 +49,15 @@ flowchart TD
 - 确认 `shared/session.record("Test-Cases 确认")` 已写入
 - 未通过不得进入阶段二
 
-### 阶段二：委托 tester/execute
+### 阶段二：委托 tester-execute
 - 调用 shared/session.record("流程状态", {
     current_step: "spec",
     pipeline: ["design", "spec", "plan", "env-config", "task-runner"],
     completed: ["design"],
     resume_context: "准备进入阶段二：生成 spec"
   })
-- tester/execute 按 4 步执行：生成 spec → 生成 plan → 环境检查 → 执行测试
-- 等待 tester/execute 返回
+- tester-execute 按 4 步执行：生成 spec → 生成 plan → 环境检查 → 执行测试
+- 等待 tester-execute 返回
 
 ### 完成
 - 收集测试报告
